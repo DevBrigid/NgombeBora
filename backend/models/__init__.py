@@ -1,5 +1,6 @@
 from backend.models.cow import Cow
 from backend.models.finance_entry import FinanceEntry
 from backend.models.milk_record import MilkRecord
+from backend.models.user import User
 
-__all__ = ["Cow", "FinanceEntry", "MilkRecord"]
+__all__ = ["Cow", "FinanceEntry", "MilkRecord", "User"]

@@ -1,4 +1,5 @@
 from flask import jsonify, request
+from flask_jwt_extended import jwt_required
 from backend.crud.finance import create_finance_entry, finance_totals, list_finance_entries
 from backend.routes import api
 from backend.schemas.common import parse_date
@@ -6,11 +7,13 @@ from backend.schemas.finance import FINANCE_CATEGORIES, validate_finance_entry
 
 
 @api.get("/finance/categories")
+@jwt_required()
 def get_finance_categories():
     return jsonify(sorted(FINANCE_CATEGORIES))
 
 
 @api.get("/finance")
+@jwt_required()
 def get_finance_entries():
     try:
         start = parse_date(request.args.get("start"), "start", False)
@@ -22,6 +25,7 @@ def get_finance_entries():
 
 
 @api.post("/finance")
+@jwt_required()
 def add_finance_entry():
     try:
         entry = create_finance_entry(validate_finance_entry(request.get_json(silent=True) or {}))

@@ -3,3 +3,6 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 migrate = Migrate()
+from flask_jwt_extended import JWTManager
+
+jwt = JWTManager()

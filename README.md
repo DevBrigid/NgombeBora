@@ -18,10 +18,10 @@ NgombeBora is a single-farm cow inventory and farm management app. The backend i
 - `app.py` — Flask app factory, CORS setup, and route registration. It no longer creates tables during startup.
 - `migrations/` — Alembic revisions managed through Flask-Migrate.
 - `extensions.py` — shared SQLAlchemy instance.
-- `models/` — Cow, MilkRecord, and FinanceEntry database models.
+- `models/` — User, Cow, MilkRecord, and FinanceEntry database models.
 - `schemas/` — request parsing and validation for each resource.
 - `crud/` — database reads, writes, serial assignment, and dashboard summaries.
-- `routes/` — Flask blueprints and HTTP handlers.
+- `routes/` — Flask blueprints and HTTP handlers, including registration, login, and current-user endpoints.
 - `config.py` — database configuration. Set `DATABASE_URL` for PostgreSQL; SQLite is used as a local fallback.
 
 ## Run locally
@@ -44,11 +44,16 @@ npm install
 npm run dev
 ```
 
-Set `DATABASE_URL` to a PostgreSQL connection string in `backend/.env` (for example `postgresql://localhost/ngombebora`). On a fresh database, run `flask --app backend.app db upgrade` once before starting the API. If you already have tables from the earlier auto-create version, back up the database and run `flask --app backend.app db stamp 0001_initial_schema` instead of `upgrade` to register the existing schema without recreating tables. The frontend uses `http://localhost:5000/api` by default; set `VITE_API_URL` to override it. CORS is enabled for API requests.
+Set `DATABASE_URL` to a PostgreSQL connection string in `backend/.env` (for example `postgresql://localhost/ngombebora`) and set `JWT_SECRET_KEY` to a long random secret. On a fresh database, run `flask --app backend.app db upgrade` before starting the API. If you already stamped the original schema at `0001_initial_schema`, run `flask --app backend.app db upgrade` now to add the users table in revision `0002_add_users`. If you already have tables from the earlier auto-create version, back up the database and run `flask --app backend.app db stamp 0001_initial_schema` instead of `upgrade` to register the existing schema without recreating tables. The frontend uses `http://localhost:5000/api` by default; set `VITE_API_URL` to override it. CORS is enabled for API requests.
+
+## Accounts
+
+Open the app to create the first account or sign in. Passwords are stored as hashes; the API returns a short-lived access token that the frontend keeps for the current browser session. Protected farm API requests require that token. Set a persistent `JWT_SECRET_KEY` in `backend/.env` so tokens remain valid across backend restarts.
 
 ## API overview
 
-- `GET /api/dashboard`
+- `POST /api/auth/register`; `POST /api/auth/login`; `GET /api/auth/me`
+- `GET /api/dashboard` (authenticated)
 - `GET /api/cows`; `POST /api/cows/purchased`; `POST /api/cows/newborn`; `PATCH /api/cows/:id/status`
 - `GET /api/milk`; `POST /api/milk`
 - `GET /api/finance`; `POST /api/finance`; `GET /api/finance/categories`

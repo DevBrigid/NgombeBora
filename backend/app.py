@@ -1,7 +1,7 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from backend.config import Config
-from backend.extensions import db, migrate
+from backend.extensions import db, migrate, jwt
 from backend import models  # noqa: F401 - register model metadata for Alembic
 from backend.routes import api
 
@@ -11,6 +11,7 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
     db.init_app(app)
     migrate.init_app(app, db)
+    jwt.init_app(app)
     CORS(app)
 
     @app.get("/")

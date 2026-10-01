@@ -8,12 +8,16 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import HerdPage from './pages/HerdPage.jsx';
 import MilkPage from './pages/MilkPage.jsx';
 import FinancesPage from './pages/FinancesPage.jsx';
-import { api } from './lib/api.js';
+import { api, clearAuthToken, getAuthToken, setAuthToken } from './lib/api.js';
+import AuthPage from './pages/AuthPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
 import { today } from './utils/format.js';
 import './styles.css';
 
 function App() {
   const [page, setPage] = useState('Dashboard');
+  const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [dashboard, setDashboard] = useState(null);
   const [cows, setCows] = useState([]);
   const [milk, setMilk] = useState([]);
@@ -47,18 +51,58 @@ function App() {
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => {
+    let active = true;
+    if (!getAuthToken()) { setAuthReady(true); return () => { active = false; }; }
+    api('/auth/me').then((currentUser) => { if (active) setUser(currentUser); })
+      .catch(() => { clearAuthToken(); if (active) setUser(null); })
+      .finally(() => { if (active) setAuthReady(true); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const expireSession = () => setUser(null);
+    window.addEventListener('ngombebora:session-expired', expireSession);
+    return () => window.removeEventListener('ngombebora:session-expired', expireSession);
+  }, []);
+
+  useEffect(() => { if (user) refresh(); }, [user, refresh]);
+  useEffect(() => {
+    if (!user) return;
     const params = new URLSearchParams();
     if (start) params.set('start', start);
     if (end) params.set('end', end);
     if (typeFilter) params.set('type', typeFilter);
     api(`/finance?${params}`).then(setFinance).catch((error) => notify(error.message));
-  }, [start, end, typeFilter]);
+  }, [start, end, typeFilter, user]);
 
   function notify(message) {
     setToast(message);
     window.setTimeout(() => setToast(''), 3200);
+  }
+
+  function handleAuthenticated(result) {
+    setAuthToken(result.access_token);
+    setUser(result.user);
+    setAuthReady(true);
+  }
+
+  function handleLogout() {
+    clearAuthToken();
+    setUser(null);
+    setDashboard(null);
+    setCows([]);
+    setMilk([]);
+    setFinance({ entries: [], totals: {} });
+  }
+
+  async function saveProfile(payload) {
+    const updatedUser = await api('/auth/me', { method: 'PATCH', body: JSON.stringify(payload) });
+    setUser(updatedUser);
+  }
+
+  async function changePassword(payload) {
+    await api('/auth/change-password', { method: 'POST', body: JSON.stringify(payload) });
   }
 
   async function submitMilk(event) {
@@ -112,14 +156,18 @@ function App() {
     Herd: <HerdPage {...pageProps}/>,
     'Milk log': <MilkPage {...pageProps}/>,
     Finances: <FinancesPage {...pageProps}/>,
+    Settings: <SettingsPage user={user} onSaveProfile={saveProfile} onChangePassword={changePassword}/>,
   };
 
+  if (!authReady) return <div className="auth-loading">Loading your farm…</div>;
+  if (!user) return <AuthPage onAuthenticated={handleAuthenticated}/>;
+
   return <div className="app-shell">
-    <Sidebar page={page} setPage={setPage} activeCows={dashboard?.active_cows}/>
+    <Sidebar page={page} setPage={setPage} activeCows={dashboard?.active_cows} onLogout={handleLogout}/>
     <main className="main">
-      <Topbar page={page}/>
+      <Topbar page={page} onSettings={() => setPage('Settings')}/>
       <div className="content">
-        <PageHeader page={page}/>
+        <PageHeader page={page} user={user}/>
         {pages[page]}
         <footer>NgombeBora <span>·</span> Good farming, better living <span className="footer-right">Your farm data stays yours.</span></footer>
       </div>
