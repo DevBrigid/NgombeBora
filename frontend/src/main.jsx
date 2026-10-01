@@ -1,44 +1,131 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import Sidebar from './components/Sidebar.jsx';
+import Topbar from './components/Topbar.jsx';
+import PageHeader from './components/PageHeader.jsx';
+import Toast from './components/Toast.jsx';
+import DashboardPage from './pages/DashboardPage.jsx';
+import HerdPage from './pages/HerdPage.jsx';
+import MilkPage from './pages/MilkPage.jsx';
+import FinancesPage from './pages/FinancesPage.jsx';
+import { api } from './lib/api.js';
+import { today } from './utils/format.js';
 import './styles.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const money = (n) => `KES ${Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
-const today = () => new Date().toISOString().slice(0, 10);
-async function api(path, options) {
-  const response = await fetch(`${API}${path}`, { headers: { 'Content-Type': 'application/json' }, ...options });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Something went wrong');
-  return data;
-}
-function Icon({ name }) {
-  const paths = { home: 'M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5h-5.8v-6.4H9.3V21H3.5a.5.5 0 0 1-.5-.5z', cows: 'M4 9 2 6v-2l5 2h10l5-2v2l-2 3v8h-3v3h-3v-3h-4v3H7v-3H4z M8 11h.01M16 11h.01', milk: 'M8 3h8l1 4 2 2v12H5V9l2-2z M7 7h10 M8 13h8', ledger: 'M6 3h12v18l-2-1-2 1-2-1-2 1-2-1-2 1z M9 8h6m-6 4h6m-6 4h4', plus: 'M12 5v14M5 12h14', search: 'm20 20-4.5-4.5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0', arrow: 'M5 12h14m-6-6 6 6-6 6', cow: 'M3 8 1 5v-2l5 2h12l5-2v2l-2 3v9h-4v3h-3v-3h-4v3H7v-3H3z' };
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={paths[name] || paths.cow}/></svg>;
-}
 function App() {
-  const [page, setPage] = useState('Dashboard'); const [dashboard, setDashboard] = useState(null); const [cows, setCows] = useState([]); const [milk, setMilk] = useState([]); const [finance, setFinance] = useState({entries: [], totals:{}}); const [toast, setToast] = useState(''); const [query, setQuery] = useState('');
-  const [milkDate, setMilkDate] = useState(today()); const [milkQty, setMilkQty] = useState(''); const [financeDate, setFinanceDate] = useState(today()); const [financeType, setFinanceType] = useState('income'); const [financeCategory, setFinanceCategory] = useState('milk_sales'); const [financeAmount, setFinanceAmount] = useState(''); const [financeNote, setFinanceNote] = useState(''); const [start, setStart] = useState(''); const [end, setEnd] = useState(''); const [typeFilter, setTypeFilter] = useState(''); const [cowFlow, setCowFlow] = useState('purchased'); const [cowForm, setCowForm] = useState({ name:'', breed:'', sex:'female', mother_id:'', sire_id:'', sire_external:'', date_of_birth:'', birth_weight:'' });
+  const [page, setPage] = useState('Dashboard');
+  const [dashboard, setDashboard] = useState(null);
+  const [cows, setCows] = useState([]);
+  const [milk, setMilk] = useState([]);
+  const [finance, setFinance] = useState({ entries: [], totals: {} });
+  const [toast, setToast] = useState('');
+  const [query, setQuery] = useState('');
+  const [milkDate, setMilkDate] = useState(today());
+  const [milkQty, setMilkQty] = useState('');
+  const [financeDate, setFinanceDate] = useState(today());
+  const [financeType, setFinanceType] = useState('income');
+  const [financeCategory, setFinanceCategory] = useState('milk_sales');
+  const [financeAmount, setFinanceAmount] = useState('');
+  const [financeNote, setFinanceNote] = useState('');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [cowFlow, setCowFlow] = useState('purchased');
+  const [cowForm, setCowForm] = useState({ name: '', breed: '', sex: 'female', mother_id: '', sire_id: '', sire_external: '', date_of_birth: '', birth_weight: '' });
+
   const refresh = useCallback(async () => {
-    try { const [d,c,m,f] = await Promise.all([api('/dashboard'), api('/cows'), api('/milk'), api('/finance')]); setDashboard(d); setCows(c); setMilk(m); setFinance(f); } catch(e) { setToast(e.message); }
+    try {
+      const [summary, herd, milkRecords, ledger] = await Promise.all([
+        api('/dashboard'), api('/cows'), api('/milk'), api('/finance'),
+      ]);
+      setDashboard(summary);
+      setCows(herd);
+      setMilk(milkRecords);
+      setFinance(ledger);
+    } catch (error) {
+      notify(error.message);
+    }
   }, []);
+
   useEffect(() => { refresh(); }, [refresh]);
-  useEffect(() => { const params = new URLSearchParams(); if(start)params.set('start',start);if(end)params.set('end',end);if(typeFilter)params.set('type',typeFilter);api(`/finance?${params}`).then(setFinance).catch(e=>setToast(e.message)); }, [start,end,typeFilter]);
-  const notify = (message) => { setToast(message); setTimeout(() => setToast(''), 3200); };
-  const submitMilk = async (e) => { e.preventDefault(); try { await api('/milk',{method:'POST',body:JSON.stringify({date:milkDate,quantity:milkQty})});setMilkQty('');notify('Milk record added');refresh(); } catch(e){notify(e.message);} };
-  const submitFinance = async (e) => { e.preventDefault(); try { await api('/finance',{method:'POST',body:JSON.stringify({date:financeDate,type:financeType,category:financeCategory,amount:financeAmount,note:financeNote})});setFinanceAmount('');setFinanceNote('');notify('Ledger entry saved');refresh(); } catch(e){notify(e.message);} };
-  const submitCow = async (e) => { e.preventDefault(); const newborn=cowFlow==='born'; const body=newborn?{...cowForm,mother_id:Number(cowForm.mother_id),sire_id:cowForm.sire_id?Number(cowForm.sire_id):null}:{...cowForm}; try {const cow=await api(`/cows/${newborn?'newborn':'purchased'}`,{method:'POST',body:JSON.stringify(body)});notify(`${cow.name} registered · ${cow.serial_number}`);setCowForm({...cowForm,name:'',birth_weight:'',sire_external:'',sire_id:''});refresh();}catch(e){notify(e.message);} };
-  const setStatus = async (cow, status) => { try { await api(`/cows/${cow.id}/status`,{method:'PATCH',body:JSON.stringify({status})});notify(`${cow.name} marked ${status}`);refresh();}catch(e){notify(e.message);} };
-  const nav = [['Dashboard','home'],['Herd','cows'],['Milk log','milk'],['Finances','ledger']];
-  const title = page === 'Dashboard' ? 'Good morning, farmer' : page === 'Herd' ? 'Your herd' : page === 'Milk log' ? 'Milk production' : 'Financial ledger';
-  const filteredCows = cows.filter(c => [c.name,c.serial_number,c.breed].join(' ').toLowerCase().includes(query.toLowerCase()));
-  return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark"><Icon name="cow"/></div><div><b>ngombebora</b><small>FARM MANAGEMENT</small></div></div><div className="farm-card"><div className="farm-avatar">MK</div><div><strong>Mavuno Farm</strong><span>Kiambu County, Kenya</span></div><span className="chevron">⌄</span></div><p className="nav-label">WORKSPACE</p><nav>{nav.map(([label,icon])=><button className={page===label?'nav-item active':'nav-item'} onClick={()=>setPage(label)} key={label}><Icon name={icon}/><span>{label}</span>{label==='Herd'&&<i>{dashboard?.active_cows??'–'}</i>}</button>)}</nav><div className="sidebar-bottom"><div className="weather"><span className="sun">☀</span><div><b>Farm overview</b><span>All systems in order</span></div><span className="online-dot"/></div><div className="profile"><div className="profile-pic">JM</div><div><b>James Mwangi</b><span>Farm owner</span></div><span className="more">···</span></div></div></aside>
-  <main className="main"><header className="topbar"><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{page}</strong></div><div className="top-actions"><div className="date-chip"><span>◷</span>{new Date().toLocaleDateString('en-KE',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div><button className="icon-button" title="Notifications">♧<i/></button><div className="header-avatar">JM</div></div></header>
-  <div className="content"><div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-dot"/> YOUR FARM AT A GLANCE</div><h1>{title}<span className="wave">✳</span></h1><p>{page==='Dashboard'?"Here's what's happening on your farm today.":page==='Herd'?'Keep track of every animal, from newborn calves to mature cows.':page==='Milk log'?'A clear view of your herd’s daily milk production.':'Keep your income and expenses organized in one place.'}</p></div>{page==='Herd'?<button className="button primary" onClick={()=>document.getElementById('cow-registration')?.scrollIntoView({behavior:'smooth'})}><Icon name="plus"/> Register cow</button>:null}</div>
-  {page==='Dashboard'&&<><section className="metric-grid"><article className="metric-card hero-metric"><div className="metric-top"><span className="metric-icon green"><Icon name="cows"/></span><span className="metric-kicker">CURRENT HERD</span><span className="metric-trend">● Active</span></div><div className="metric-value">{dashboard?.active_cows??'–'} <small>cows</small></div><div className="metric-foot"><span>Across your entire farm</span><button onClick={()=>setPage('Herd')}>View herd <Icon name="arrow"/></button></div><div className="decor-circle"/></article><article className="metric-card"><div className="metric-top"><span className="metric-icon cream">♀</span><span className="metric-kicker">HERD COMPOSITION</span></div><div className="sex-values"><div><b>{dashboard?.by_sex?.female??0}</b><span>Female</span></div><div className="vline"/><div><b>{dashboard?.by_sex?.male??0}</b><span>Male</span></div></div><div className="mini-bar"><i style={{width:`${dashboard?.active_cows?dashboard.by_sex.female/dashboard.active_cows*100:0}%`}}/></div><div className="metric-foot"><span>Female / Male</span><span>{dashboard?.active_cows?Math.round(dashboard.by_sex.female/dashboard.active_cows*100):0}% female</span></div></article><article className="metric-card"><div className="metric-top"><span className="metric-icon blue">◉</span><span className="metric-kicker">MILK THIS MONTH</span></div><div className="metric-value">{Number(dashboard?.milk_this_month||0).toLocaleString()} <small>litres</small></div><div className="metric-foot"><span className="quiet">Herd-wide production</span><button onClick={()=>setPage('Milk log')}>Milk log <Icon name="arrow"/></button></div><div className="sparkline"><svg viewBox="0 0 150 28" preserveAspectRatio="none"><path d="M0 22 C12 23 14 13 27 18 S48 24 55 14 S76 19 84 10 S104 18 114 7 S132 12 150 2"/></svg></div></article><article className="metric-card"><div className="metric-top"><span className="metric-icon gold">↗</span><span className="metric-kicker">NET INCOME · THIS MONTH</span></div><div className="metric-value money-value">{money(dashboard?.net_income_this_month)} <small>KES</small></div><div className="metric-foot"><span className="quiet">Income after expenses</span><button onClick={()=>setPage('Finances')}>Open ledger <Icon name="arrow"/></button></div></article></section><section className="dashboard-grid"><article className="panel herd-panel"><div className="panel-header"><div><div className="panel-eyebrow">ANIMAL REGISTER</div><h2>Recent newborns</h2><p>Calves welcomed in the last 30 days</p></div><button className="text-link" onClick={()=>setPage('Herd')}>View all <Icon name="arrow"/></button></div>{dashboard?.recent_newborns?.length?<div className="newborn-list">{dashboard.recent_newborns.slice(0,4).map(c=><div className="newborn-row" key={c.id}><div className="calf-avatar">{c.sex==='female'?'♀':'♂'}</div><div className="calf-info"><b>{c.name}</b><span>{c.serial_number} · {c.mother_name||'Mother recorded'}</span></div><span className="calf-date">{c.date_of_birth}</span><span className="status-pill">Healthy</span></div>)}</div>:<div className="empty-inline"><span>✳</span><b>No new calves this month</b><small>Newborns you register will appear here.</small><button onClick={()=>{setPage('Herd');setCowFlow('born')}}>Register a newborn <Icon name="arrow"/></button></div>}</article><article className="panel composition-panel"><div className="panel-header"><div><div className="panel-eyebrow">HERD OVERVIEW</div><h2>On your farm</h2><p>By how they joined the herd</p></div><span className="tiny-icon"><Icon name="cows"/></span></div><div className="source-stat"><div className="source-icon born">✳</div><div><b>Farm-born</b><span>Raised right here</span></div><strong>{dashboard?.by_acquisition?.born??0}</strong></div><div className="source-stat"><div className="source-icon bought">↗</div><div><b>Purchased</b><span>Joined your farm</span></div><strong>{dashboard?.by_acquisition?.purchased??0}</strong></div><div className="historic-line"><span>Past herd records</span><b><em>{dashboard?.inactive_historical?.sold??0}</em> sold <i/> <em>{dashboard?.inactive_historical?.deceased??0}</em> deceased</b></div></article></section></>}
-  {page==='Herd'&&<><section className="panel register-panel" id="cow-registration"><div className="panel-header"><div><div className="panel-eyebrow">ADD TO ANIMAL REGISTER</div><h2>Register a cow</h2><p>Every animal receives a permanent farm ID automatically.</p></div><span className="tiny-icon"><Icon name="plus"/></span></div><div className="flow-toggle"><button className={cowFlow==='purchased'?'selected':''} onClick={()=>setCowFlow('purchased')}>Purchased cow <small>New root ID · COW-000X</small></button><button className={cowFlow==='born'?'selected':''} onClick={()=>setCowFlow('born')}>Farm-born calf <small>Mother-linked calf ID</small></button></div><form className="form-grid" onSubmit={submitCow}><label>Name<input required value={cowForm.name} onChange={e=>setCowForm({...cowForm,name:e.target.value})} placeholder="e.g. Nyota"/></label><label>Sex<select value={cowForm.sex} onChange={e=>setCowForm({...cowForm,sex:e.target.value})}><option value="female">Female</option><option value="male">Male</option></select></label><label>Breed <small className="optional">Optional</small><input value={cowForm.breed} onChange={e=>setCowForm({...cowForm,breed:e.target.value})} placeholder="e.g. Friesian"/></label><label>Date of birth {cowFlow==='purchased'&&<small className="optional">Optional</small>}<input required={cowFlow==='born'} type="date" value={cowForm.date_of_birth} onChange={e=>setCowForm({...cowForm,date_of_birth:e.target.value})}/></label>{cowFlow==='born'&&<><label>Mother<select required value={cowForm.mother_id} onChange={e=>setCowForm({...cowForm,mother_id:e.target.value})}><option value="">Select a female cow</option>{cows.filter(c=>c.sex==='female'&&c.status==='active').map(c=><option value={c.id} key={c.id}>{c.name} · {c.serial_number}</option>)}</select></label><label>Birth weight <small className="optional">kg · optional</small><input type="number" min="0" step="0.1" value={cowForm.birth_weight} onChange={e=>setCowForm({...cowForm,birth_weight:e.target.value})} placeholder="e.g. 32"/></label><label>Existing sire <small className="optional">Optional</small><select value={cowForm.sire_id} onChange={e=>setCowForm({...cowForm,sire_id:e.target.value,sire_external:''})}><option value="">No sire selected</option>{cows.filter(c=>c.sex==='male').map(c=><option value={c.id} key={c.id}>{c.name} · {c.serial_number}</option>)}</select></label><label>Outside bull <small className="optional">Optional</small><input value={cowForm.sire_external} onChange={e=>setCowForm({...cowForm,sire_external:e.target.value,sire_id:''})} placeholder="Bull name or details"/></label></>}</div><div className="form-bottom"><span className="serial-note"><Icon name="cows"/> ID is assigned automatically after saving</span><button className="button primary" type="submit"><Icon name="plus"/> Save cow</button></div></form><section className="panel herd-list-panel"><div className="panel-header"><div><div className="panel-eyebrow">ALL ANIMALS</div><h2>Animal register <span className="count-badge">{cows.length}</span></h2><p>Search and manage every animal on your farm.</p></div><label className="search-box"><Icon name="search"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search cows..."/></label></div><div className="table-wrap"><table><thead><tr><th>ANIMAL</th><th>FARM ID</th><th>SEX</th><th>TYPE</th><th>DATE OF BIRTH</th><th>STATUS</th><th/></tr></thead><tbody>{filteredCows.map(c=><tr key={c.id}><td><div className="table-animal"><span className={`animal-avatar ${c.sex}`}>{c.sex==='female'?'♀':'♂'}</span><div><b>{c.name}</b><small>{c.breed||'Breed not recorded'}</small></div></div></td><td className="serial-cell">{c.serial_number}</td><td>{c.sex}</td><td><span className={`type-tag ${c.acquisition_type}`}>{c.acquisition_type==='born'?'Farm-born':'Purchased'}</span></td><td>{c.date_of_birth||'—'}</td><td><span className={`status-dot ${c.status}`}>{c.status}</span></td><td><select className="status-select" aria-label={`Update ${c.name} status`} value={c.status} onChange={e=>setStatus(c,e.target.value)}><option value="active">Active</option><option value="sold">Mark sold</option><option value="deceased">Mark deceased</option></select></td></tr>)}</tbody></table>{!filteredCows.length&&<div className="empty-table">No cows found. Register the first animal above.</div>}</div></section></>}
-  {page==='Milk log'&&<section className="split-layout"><article className="panel entry-panel"><div className="panel-header"><div><div className="panel-eyebrow">HERD-WIDE PRODUCTION</div><h2>Log milk collection</h2><p>Record the total quantity collected from the herd.</p></div><span className="metric-icon blue"><Icon name="milk"/></span></div><form onSubmit={submitMilk} className="stack-form"><label>Collection date<input required type="date" value={milkDate} onChange={e=>setMilkDate(e.target.value)}/></label><label>Total quantity <small className="optional">litres</small><div className="input-suffix"><input required type="number" min="0.01" step="0.01" value={milkQty} onChange={e=>setMilkQty(e.target.value)} placeholder="0.00"/><span>L</span></div></label><button className="button primary wide"><Icon name="plus"/> Add milk record</button></form></article><article className="panel records-panel"><div className="panel-header"><div><div className="panel-eyebrow">RECENT ACTIVITY</div><h2>Milk records</h2><p>Most recent collections first.</p></div><span className="count-badge">{milk.length}</span></div>{milk.length?<div className="record-list">{milk.map(m=><div className="record-row" key={m.id}><div className="record-date"><b>{new Date(`${m.date}T12:00:00`).toLocaleDateString('en-KE',{day:'2-digit'})}</b><span>{new Date(`${m.date}T12:00:00`).toLocaleDateString('en-KE',{month:'short',year:'numeric'})}</span></div><div className="record-label"><b>Herd collection</b><span>Whole-farm total</span></div><strong>{Number(m.quantity).toLocaleString()} <small>L</small></strong></div>)}</div>:<div className="empty-inline"><span>◌</span><b>No milk entries yet</b><small>Log today’s collection to start tracking production.</small></div>}</article></section>}
-  {page==='Finances'&&<><section className="ledger-summary"><article><span>Total income</span><b>{money(finance.totals?.income)}</b><i className="income-dot"/></article><article><span>Total expenditure</span><b>{money(finance.totals?.expenditure)}</b><i className="expense-dot"/></article><article className="net-summary"><span>Net balance</span><b>{money(finance.totals?.net)}</b><span className="net-mark">↗</span></article></section><section className="split-layout finance-layout"><article className="panel entry-panel"><div className="panel-header"><div><div className="panel-eyebrow">QUICK ENTRY</div><h2>Add a transaction</h2><p>Log a sale, income or farm expense.</p></div><span className="metric-icon gold"><Icon name="ledger"/></span></div><form onSubmit={submitFinance} className="stack-form"><label>Transaction type<select value={financeType} onChange={e=>setFinanceType(e.target.value)}><option value="income">Income</option><option value="expenditure">Expenditure</option></select></label><label>Category<select value={financeCategory} onChange={e=>setFinanceCategory(e.target.value)}>{['milk_sales','livestock_sales','feed','vet','breeding_cost','labor','equipment','other'].map(x=><option key={x} value={x}>{x.replace('_',' ')}</option>)}</select></label><label>Date<input required type="date" value={financeDate} onChange={e=>setFinanceDate(e.target.value)}/></label><label>Amount <small className="optional">KES</small><div className="input-suffix"><span>KES</span><input required type="number" min="0.01" step="0.01" value={financeAmount} onChange={e=>setFinanceAmount(e.target.value)} placeholder="0.00"/></div></label><label>Note <small className="optional">Optional</small><input value={financeNote} onChange={e=>setFinanceNote(e.target.value)} placeholder="Add a short description"/></label><button className="button primary wide"><Icon name="plus"/> Save transaction</button></form></article><article className="panel ledger-panel"><div className="panel-header"><div><div className="panel-eyebrow">TRANSACTION HISTORY</div><h2>All entries</h2><p>Filter records and review your balance.</p></div><span className="count-badge">{finance.entries?.length||0}</span></div><div className="filters"><label>From<input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label><label>To<input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label><label>Type<select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="">All types</option><option value="income">Income</option><option value="expenditure">Expenditure</option></select></label></div><div className="table-wrap"><table><thead><tr><th>DATE</th><th>DETAILS</th><th>TYPE</th><th>AMOUNT</th></tr></thead><tbody>{finance.entries?.map(f=><tr key={f.id}><td>{f.date}</td><td><div className="finance-detail"><b>{f.category.replaceAll('_',' ')}</b><small>{f.note||'—'}</small></div></td><td><span className={`finance-type ${f.type}`}>{f.type}</span></td><td className={`amount-cell ${f.type}`}>{f.type==='income'?'+':'−'} {money(f.amount)}</td></tr>)}</tbody></table>{!finance.entries?.length&&<div className="empty-table">No entries match this period.</div>}</div></article></section></>}
-  <footer>NgombeBora <span>·</span> Good farming, better living <span className="footer-right">Your farm data stays yours.</span></footer></div></main>{toast&&<div className="toast">{toast}</div>}</div>;
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (start) params.set('start', start);
+    if (end) params.set('end', end);
+    if (typeFilter) params.set('type', typeFilter);
+    api(`/finance?${params}`).then(setFinance).catch((error) => notify(error.message));
+  }, [start, end, typeFilter]);
+
+  function notify(message) {
+    setToast(message);
+    window.setTimeout(() => setToast(''), 3200);
+  }
+
+  async function submitMilk(event) {
+    event.preventDefault();
+    try {
+      await api('/milk', { method: 'POST', body: JSON.stringify({ date: milkDate, quantity: milkQty }) });
+      setMilkQty(''); notify('Milk record added'); refresh();
+    } catch (error) { notify(error.message); }
+  }
+
+  async function submitFinance(event) {
+    event.preventDefault();
+    try {
+      await api('/finance', { method: 'POST', body: JSON.stringify({ date: financeDate, type: financeType, category: financeCategory, amount: financeAmount, note: financeNote }) });
+      setFinanceAmount(''); setFinanceNote(''); notify('Ledger entry saved'); refresh();
+    } catch (error) { notify(error.message); }
+  }
+
+  async function submitCow(event) {
+    event.preventDefault();
+    const newborn = cowFlow === 'born';
+    const payload = newborn
+      ? { ...cowForm, mother_id: Number(cowForm.mother_id), sire_id: cowForm.sire_id ? Number(cowForm.sire_id) : null }
+      : cowForm;
+    try {
+      const cow = await api(`/cows/${newborn ? 'newborn' : 'purchased'}`, { method: 'POST', body: JSON.stringify(payload) });
+      notify(`${cow.name} registered · ${cow.serial_number}`);
+      setCowForm({ ...cowForm, name: '', birth_weight: '', sire_external: '', sire_id: '' });
+      refresh();
+    } catch (error) { notify(error.message); }
+  }
+
+  async function setCowStatus(cow, status) {
+    try {
+      await api(`/cows/${cow.id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      notify(`${cow.name} marked ${status}`); refresh();
+    } catch (error) { notify(error.message); }
+  }
+
+  const filteredCows = cows.filter((cow) => [cow.name, cow.serial_number, cow.breed].join(' ').toLowerCase().includes(query.toLowerCase()));
+  const pageProps = {
+    dashboard, setPage, setCowFlow,
+    cowFlow, cowForm, setCowForm, cows, submitCow, query, setQuery, filteredCows, setStatus: setCowStatus,
+    milkDate, setMilkDate, milkQty, setMilkQty, submitMilk, milk,
+    financeDate, setFinanceDate, financeType, setFinanceType, financeCategory, setFinanceCategory,
+    financeAmount, setFinanceAmount, financeNote, setFinanceNote, start, setStart, end, setEnd,
+    typeFilter, setTypeFilter, submitFinance, finance,
+  };
+  const pages = {
+    Dashboard: <DashboardPage {...pageProps}/>,
+    Herd: <HerdPage {...pageProps}/>,
+    'Milk log': <MilkPage {...pageProps}/>,
+    Finances: <FinancesPage {...pageProps}/>,
+  };
+
+  return <div className="app-shell">
+    <Sidebar page={page} setPage={setPage} activeCows={dashboard?.active_cows}/>
+    <main className="main">
+      <Topbar page={page}/>
+      <div className="content">
+        <PageHeader page={page}/>
+        {pages[page]}
+        <footer>NgombeBora <span>·</span> Good farming, better living <span className="footer-right">Your farm data stays yours.</span></footer>
+      </div>
+    </main>
+    <Toast message={toast}/>
+  </div>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
